@@ -34,7 +34,7 @@ static struct pseudodesc idt_pd = {
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void
 idt_init(void) {
-     /* LAB1 YOUR CODE : STEP 2 */
+     /* LAB1 2017011620 : STEP 2 */
      /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?
       *     All ISR's entry addrs are stored in __vectors. where is uintptr_t __vectors[] ?
       *     __vectors[] is in kern/trap/vector.S which is produced by tools/vector.c
@@ -46,6 +46,18 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
+
+    extern uintptr_t __vectors[];
+
+    for (int i = 0; i < sizeof(idt) / sizeof(struct gatedesc); ++i) {
+        if (i == T_SWITCH_TOK) {
+            SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_USER);
+        } else {
+            SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
+        }
+    }
+
+    lidt(&idt_pd);
 }
 
 static const char *
@@ -141,12 +153,16 @@ trap_dispatch(struct trapframe *tf) {
 
     switch (tf->tf_trapno) {
     case IRQ_OFFSET + IRQ_TIMER:
-        /* LAB1 YOUR CODE : STEP 3 */
+        /* LAB1 2017011620 : STEP 3 */
         /* handle the timer interrupt */
         /* (1) After a timer interrupt, you should record this event using a global variable (increase it), such as ticks in kern/driver/clock.c
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
+        ++ticks;
+        if (ticks % TICK_NUM == 0) {
+            print_ticks();
+        }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
@@ -154,12 +170,39 @@ trap_dispatch(struct trapframe *tf) {
         break;
     case IRQ_OFFSET + IRQ_KBD:
         c = cons_getc();
+        if (c == '0') {
+            if (tf->tf_cs != KERNEL_CS) {
+                tf->tf_cs = KERNEL_CS;
+                tf->tf_ds = tf->tf_es = KERNEL_DS;
+                tf->tf_eflags &= ~FL_IOPL_MASK;
+                print_trapframe(tf);
+                cprintf("switched to kernel\n");
+            }
+        } else if (c == '3') {
+            if (tf->tf_cs != USER_CS) {
+                tf->tf_cs = USER_CS;
+                tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+                tf->tf_eflags |= FL_IOPL_MASK;
+                print_trapframe(tf);
+                cprintf("switched to user\n");
+            }
+        }
         cprintf("kbd [%03d] %c\n", c, c);
         break;
-    //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
+    //LAB1 CHALLENGE 1 : 2017011620 you should modify below codes.
     case T_SWITCH_TOU:
+        if (tf->tf_cs != USER_CS) {
+            tf->tf_cs = USER_CS;
+            tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+            tf->tf_eflags |= FL_IOPL_MASK;
+        }
+        break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        if (tf->tf_cs != KERNEL_CS) {
+            tf->tf_cs = KERNEL_CS;
+            tf->tf_ds = tf->tf_es = KERNEL_DS;
+            tf->tf_eflags &= ~FL_IOPL_MASK;
+        }
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
