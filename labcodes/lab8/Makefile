@@ -275,9 +275,6 @@ endef
 $(foreach p,$(USER_BINS),$(eval $(call fscopy,$(p),$(SFSROOT)$(SLASH))))
 
 $(SFSROOT):
-	if [ ! -d "$(SFSROOT)" ]; then mkdir $(SFSROOT); fi
-
-$(SFSROOT):
 	$(V)$(MKDIR) $@
 
 $(SFSIMG): $(SFSROOT) $(SFSBINS) | $(call totarget,mksfs)
